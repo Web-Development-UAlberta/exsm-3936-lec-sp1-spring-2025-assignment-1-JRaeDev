@@ -1,3 +1,4 @@
+async function main() {
 // ================= CLASSES =================
 
 class Engine {
@@ -180,3 +181,4 @@ function safe(fn) {
 
 updateDisplay();
 generateTransmissionControls();
+}
