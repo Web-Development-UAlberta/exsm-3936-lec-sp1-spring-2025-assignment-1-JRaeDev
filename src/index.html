@@ -1,25 +1,274 @@
 <!DOCTYPE html>
-<html lang="en-CA">
-    <head>
-        <meta charset="utf-8">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <title>JavaScript Console App</title>
-        <meta name="description" content="">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="stylesheet" href="css/styles.css">
-    </head>
-    <body>
-        <div id="themes">
-            <div class="white-on-black theme">Tt</div>
-            <div class="green-on-black theme">Tt</div>
-            <div class="black-on-white theme">Tt</div>
-        </div>
-        <div class="container">
-            <div id="output">
-            </div>
-            <input id="input" type="text">
-        </div>
-        <script src="js/scripts.js" defer></script>
-        <script src="js/console.js" defer></script>
-    </body>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Car Simulator</title>
+
+<style>
+body {
+    font-family: Segoe UI, sans-serif;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.container {
+    background: white;
+    padding: 30px;
+    border-radius: 20px;
+    width: 900px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.3);
+}
+
+.car-display {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+.car-card {
+    background: #f3f6fb;
+    padding: 20px;
+    border-radius: 15px;
+}
+
+.property {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+}
+
+.engine-status {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+}
+
+.engine-on { background: #28a745; color: white; }
+.engine-off { background: #dc3545; color: white; }
+
+.controls, .transmission-controls {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+button {
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-start { background: #28a745; color: white; }
+.btn-stop { background: #dc3545; color: white; }
+.btn-drive { background: #667eea; color: white; }
+
+.gear-btn { background: #6c757d; color: white; }
+.gear-btn.active { background: #ffc107; color: black; }
+
+.console-output {
+    background: #111;
+    color: #0f0;
+    padding: 15px;
+    height: 200px;
+    overflow-y: auto;
+    font-family: monospace;
+    border-radius: 10px;
+    margin-top: 15px;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h2 style="text-align:center;">🚗 Car & Engine Simulator</h2>
+
+<div class="car-display">
+    <div class="car-card">
+        <h3>Car</h3>
+        <div class="property"><span>Make</span><span id="car-make"></span></div>
+        <div class="property"><span>Model</span><span id="car-model"></span></div>
+        <div class="property"><span>Year</span><span id="car-year"></span></div>
+        <div class="property"><span>Odometer</span><span id="car-odometer"></span></div>
+    </div>
+
+    <div class="car-card">
+        <h3>Engine</h3>
+        <div class="property"><span>Status</span><span id="engine-status" class="engine-status engine-off">OFF</span></div>
+        <div class="property"><span>Cylinders</span><span id="engine-cylinders"></span></div>
+    </div>
+
+    <div class="car-card">
+        <h3>Transmission</h3>
+        <div class="property"><span>Type</span><span id="transmission-type"></span></div>
+        <div class="property"><span>Gear Count</span><span id="transmission-gears"></span></div>
+        <div class="property"><span>Current Gear</span><span id="current-gear"></span></div>
+    </div>
+</div>
+
+<div class="controls">
+    <button class="btn-start" onclick="safe(() => myCar.start())">Start Engine</button>
+    <button class="btn-stop" onclick="safe(() => myCar.stop())">Stop Engine</button>
+</div>
+
+<div class="controls">
+    <input type="number" id="drive-distance" value="50" min="1" style="width:80px;">
+    <button class="btn-drive" onclick="safe(() => driveFromInput())">Drive</button>
+</div>
+
+<h3 style="text-align:center;">Transmission Controls</h3>
+<div id="transmission-controls" class="transmission-controls"></div>
+
+<div class="console-output" id="console-output"></div>
+
+</div>
+
+<script>
+// ================= CLASSES =================
+
+class Engine {
+    constructor(cylinders) {
+        this.cylinders = cylinders;
+        this.running = false;
+    }
+    start() { this.running = true; }
+    stop() { this.running = false; }
+}
+
+class Transmission {
+    constructor(type, gearCount) {
+        this.type = type;
+        this.gearCount = gearCount;
+        this.currentGear = "park";
+    }
+
+    shift(gear, engineRunning) {
+        if (!engineRunning) throw new Error("Cannot change gears while engine is off.");
+
+        const valid = ["park","reverse","neutral","drive"];
+        if (!valid.includes(gear)) throw new Error("Invalid gear.");
+
+        this.currentGear = gear;
+    }
+
+    canStart() {
+        return ["park","neutral"].includes(this.currentGear);
+    }
+
+    canStop() {
+        return this.currentGear === "park";
+    }
+
+    isDrive() {
+        return this.currentGear === "drive";
+    }
+}
+
+class Car {
+    constructor(make, model, year) {
+        this.make = make;
+        this.model = model;
+        this.year = year;
+        this.odometer = 0;
+        this.engine = new Engine(6);
+        this.transmission = new Transmission("automatic", 6);
+    }
+
+    start() {
+        if (this.engine.running) throw new Error("Engine already running.");
+        if (!this.transmission.canStart())
+            throw new Error("Must be in Park or Neutral to start.");
+        this.engine.start();
+        log("✅ Engine started");
+        updateDisplay();
+    }
+
+    stop() {
+        if (!this.transmission.canStop())
+            throw new Error("Must be in Park to stop engine.");
+        this.engine.stop();
+        log("🛑 Engine stopped");
+        updateDisplay();
+    }
+
+    shift(gear) {
+        this.transmission.shift(gear, this.engine.running);
+        log(`🔄 Shifted to ${gear.toUpperCase()}`);
+        updateDisplay();
+        generateTransmissionControls();
+    }
+
+    drive(distance) {
+        if (!this.engine.running) throw new Error("Cannot drive: engine off.");
+        if (!this.transmission.isDrive())
+            throw new Error("Must be in Drive to move.");
+        if (distance <= 0) throw new Error("Distance must be greater than 0.");
+
+        this.odometer += distance;
+        log(`🚗 Drove ${distance} km (Total: ${this.odometer} km)`);
+        updateDisplay();
+    }
+}
+
+// ================= UI =================
+
+let myCar = new Car("Mustang", "Boss", 1975);
+
+function updateDisplay() {
+    document.getElementById("car-make").textContent = myCar.make;
+    document.getElementById("car-model").textContent = myCar.model;
+    document.getElementById("car-year").textContent = myCar.year;
+    document.getElementById("car-odometer").textContent = myCar.odometer + " km";
+    document.getElementById("engine-cylinders").textContent = myCar.engine.cylinders;
+
+    const status = document.getElementById("engine-status");
+    status.textContent = myCar.engine.running ? "ON" : "OFF";
+    status.className = "engine-status " + (myCar.engine.running ? "engine-on" : "engine-off");
+
+    document.getElementById("transmission-type").textContent = "Automatic";
+    document.getElementById("transmission-gears").textContent = myCar.transmission.gearCount;
+    document.getElementById("current-gear").textContent = myCar.transmission.currentGear.toUpperCase();
+}
+
+function generateTransmissionControls() {
+    const container = document.getElementById("transmission-controls");
+    container.innerHTML = "";
+
+    ["park","reverse","neutral","drive"].forEach(g => {
+        const b = document.createElement("button");
+        b.textContent = g[0].toUpperCase();
+        b.className = "gear-btn" + (myCar.transmission.currentGear === g ? " active" : "");
+        b.onclick = () => safe(() => myCar.shift(g));
+        container.appendChild(b);
+    });
+}
+
+function driveFromInput() {
+    const val = parseFloat(document.getElementById("drive-distance").value);
+    myCar.drive(val);
+}
+
+function log(msg) {
+    const c = document.getElementById("console-output");
+    c.innerHTML += msg + "<br>";
+    c.scrollTop = c.scrollHeight;
+}
+
+function safe(fn) {
+    try { fn(); }
+    catch(e){ log("❌ " + e.message); }
+}
+
+updateDisplay();
+generateTransmissionControls();
+</script>
+</body>
 </html>
